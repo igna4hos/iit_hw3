@@ -12,34 +12,34 @@ cells = []
 
 cells.append(
     nbf.v4.new_markdown_cell(
-        """# Text Classification Homework
+        """# Лабораторная работа: классификация текстов
 
-This notebook follows the methodology from the provided guide and completes three parts:
+Этот ноутбук оформлен по шагам из предоставленной методички и решает три задачи:
 
-1. Reproduce the `review_polarity` workflow from the methodology PDF.
-2. Reach and then exceed the reference accuracy target of `0.855`.
-3. Train and evaluate a second text model on a Kaggle dataset with at least 2000 rows.
+1. Воспроизводит пайплайн для `review_polarity` по PDF-методичке.
+2. Достигает целевой точности `0.855`, а затем улучшает результат.
+3. Обучает и оценивает вторую модель на дополнительном текстовом датасете из Kaggle размером более 2000 строк.
 """
     )
 )
 
 cells.append(
     nbf.v4.new_markdown_cell(
-        """## Methodology Checklist
+        """## План по методичке
 
-The PDF guide describes the following sequence, and the notebook keeps that order for the primary dataset:
+PDF-методичка предлагает следующую последовательность шагов, и для основного датасета ноутбук придерживается именно её:
 
-1. Import libraries
-2. Import dataset
-3. Text preprocessing
-4. Convert text to numbers
-5. Create train/test sets
-6. Train a classifier and predict
-7. Evaluate the model
-8. Save and load the model
+1. Импорт библиотек
+2. Загрузка датасета
+3. Предобработка текста
+4. Преобразование текста в числовые признаки
+5. Разделение на обучающую и тестовую выборки
+6. Обучение классификатора и получение предсказаний
+7. Оценка качества модели
+8. Сохранение и загрузка модели
 
-For `review_polarity`, the notebook first reproduces the guide almost verbatim, then performs controlled tuning to surpass the target score.  
-For the extra Kaggle dataset, the same general pipeline is reused with a stronger linear baseline for text classification.
+Для `review_polarity` сначала воспроизводится базовый вариант из методички, а затем выполняется контролируемое улучшение параметров.  
+Для дополнительного Kaggle-датасета используется тот же общий подход, но с более сильной линейной моделью для текстовой классификации.
 """
     )
 )
@@ -72,17 +72,20 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
+# Подавляем второстепенные предупреждения, чтобы вывод был чище.
 warnings.filterwarnings("ignore")
 pd.set_option("display.max_colwidth", 140)
 pd.set_option("display.precision", 4)
 sns.set_theme(style="whitegrid")
 
+# Базовые рабочие директории проекта.
 ROOT = Path.cwd()
 DATA_DIR = ROOT / "data"
 ARTIFACTS_DIR = ROOT / "artifacts"
 DATA_DIR.mkdir(exist_ok=True)
 ARTIFACTS_DIR.mkdir(exist_ok=True)
 
+# Загружаем необходимые ресурсы NLTK для стоп-слов и лемматизации.
 for package in ["stopwords", "wordnet", "omw-1.4"]:
     nltk.download(package, quiet=True)
 
@@ -91,6 +94,8 @@ lemmatizer = WordNetLemmatizer()
 
 
 def preprocess_review_text(doc):
+    # Очистка текста по схеме из методички: убираем лишние символы,
+    # приводим к нижнему регистру и лемматизируем слова.
     text = re.sub(r"\\W", " ", str(doc))
     text = re.sub(r"\\s+[a-zA-Z]\\s+", " ", text)
     text = re.sub(r"\\^[a-zA-Z]\\s+", " ", text)
@@ -102,6 +107,8 @@ def preprocess_review_text(doc):
 
 
 def clean_imdb_text(text):
+    # Отдельная очистка для IMDB: удаляем HTML-теги, не-буквенные символы
+    # и нормализуем пробелы.
     text = str(text)
     text = re.sub(r"<br\\s*/?>", " ", text)
     text = re.sub(r"[^a-zA-Z]", " ", text)
@@ -110,6 +117,8 @@ def clean_imdb_text(text):
 
 
 def evaluate_candidates(candidates, x_train, x_test, y_train, y_test):
+    # Последовательно обучаем несколько моделей-кандидатов
+    # и собираем сравнительную таблицу по точности и времени.
     rows = []
     fitted = {}
     for name, model in candidates.items():
@@ -130,19 +139,20 @@ def evaluate_candidates(candidates, x_train, x_test, y_train, y_test):
 
 
 def report_dataframe(y_true, y_pred):
+    # Преобразуем classification_report в DataFrame для удобного отображения.
     return pd.DataFrame(classification_report(y_true, y_pred, output_dict=True)).transpose()
 
 
-print(f"Working directory: {ROOT}")
-print(f"Data directory: {DATA_DIR}")
-print(f"Artifacts directory: {ARTIFACTS_DIR}")
+print(f"Рабочая директория: {ROOT}")
+print(f"Папка с данными: {DATA_DIR}")
+print(f"Папка с артефактами: {ARTIFACTS_DIR}")
 """
     )
 )
 
 cells.append(
     nbf.v4.new_markdown_cell(
-        """## Part 1. `review_polarity` From The Methodology Guide"""
+        """## Часть 1. Датасет `review_polarity` по методичке"""
     )
 )
 
@@ -152,20 +162,22 @@ cells.append(
 review_archive = DATA_DIR / "review_polarity.tar.gz"
 review_folder = DATA_DIR / "txt_sentoken"
 
+# Если датасет ещё не скачан, загружаем архив и распаковываем его.
 if not review_folder.exists():
     if not review_archive.exists():
         urllib.request.urlretrieve(review_url, review_archive)
     with tarfile.open(review_archive, "r:gz") as archive:
         archive.extractall(DATA_DIR)
 
+# Загружаем тексты и целевые метки средствами scikit-learn.
 movie_data = load_files(review_folder)
 review_text_raw = movie_data.data
 review_target = movie_data.target
 review_label_names = movie_data.target_names
 
-print("Loaded review_polarity from:", review_folder)
-print("Documents:", len(review_text_raw))
-print("Labels:", review_label_names)
+print("Датасет review_polarity загружен из:", review_folder)
+print("Количество документов:", len(review_text_raw))
+print("Названия классов:", review_label_names)
 """
     )
 )
@@ -184,6 +196,7 @@ cells.append(
 )
 display(review_overview)
 
+# Показываем несколько исходных примеров до очистки текста.
 review_preview = pd.DataFrame(
     {
         "label": [review_label_names[review_target[i]] for i in range(3)],
@@ -197,7 +210,8 @@ display(review_preview)
 
 cells.append(
     nbf.v4.new_code_cell(
-        """review_documents = [preprocess_review_text(doc) for doc in review_text_raw]
+        """# Применяем предобработку ко всем отзывам.
+review_documents = [preprocess_review_text(doc) for doc in review_text_raw]
 review_df = pd.DataFrame(
     {
         "text": review_documents,
@@ -207,38 +221,42 @@ review_df = pd.DataFrame(
 )
 
 display(review_df.head(3))
-print("Average cleaned document length:", round(review_df["text"].str.len().mean(), 2))
+print("Средняя длина очищенного документа:", round(review_df["text"].str.len().mean(), 2))
 """
     )
 )
 
 cells.append(
     nbf.v4.new_markdown_cell(
-        """### Exact Guide Baseline
+        """### Базовый вариант строго по методичке
 
-This cell intentionally follows the guide closely:
+Эта ячейка намеренно повторяет схему из PDF почти без изменений:
 
 - `CountVectorizer(max_features=1500, min_df=5, max_df=0.7, stop_words=...)`
 - `TfidfTransformer()`
 - `train_test_split(..., test_size=0.2, random_state=0)`
 - `RandomForestClassifier(n_estimators=1000, random_state=0)`
 
-Note: the guide vectorizes the full dataset before the split. That reproduces the original workflow, even though a strict production pipeline would fit the vectorizer only on the training split.
+Важно: в методичке векторизация выполняется до разбиения на train/test. Это сохранено здесь для воспроизведения исходного примера, хотя в более строгом практическом пайплайне векторизатор обычно обучают только на тренировочной выборке.
 """
     )
 )
 
 cells.append(
     nbf.v4.new_code_cell(
-        """guide_vectorizer = CountVectorizer(
+        """# Преобразуем тексты в мешок слов по правилам из методички.
+guide_vectorizer = CountVectorizer(
     max_features=1500,
     min_df=5,
     max_df=0.7,
     stop_words=stop_words,
 )
 guide_x_counts = guide_vectorizer.fit_transform(review_documents).toarray()
+
+# Затем пересчитываем частоты слов в TF-IDF-признаки.
 guide_x_tfidf = TfidfTransformer().fit_transform(guide_x_counts).toarray()
 
+# Делим данные на обучающую и тестовую части.
 guide_x_train, guide_x_test, guide_y_train, guide_y_test = train_test_split(
     guide_x_tfidf,
     review_target,
@@ -246,6 +264,7 @@ guide_x_train, guide_x_test, guide_y_train, guide_y_test = train_test_split(
     random_state=0,
 )
 
+# Обучаем базовый случайный лес из методички и оцениваем качество.
 guide_classifier = RandomForestClassifier(n_estimators=1000, random_state=0, n_jobs=-1)
 guide_start = time.perf_counter()
 guide_classifier.fit(guide_x_train, guide_y_train)
@@ -253,14 +272,16 @@ guide_pred = guide_classifier.predict(guide_x_test)
 guide_elapsed = time.perf_counter() - guide_start
 guide_accuracy = accuracy_score(guide_y_test, guide_pred)
 
-print("Guide baseline accuracy:", round(guide_accuracy, 4))
-print("Guide training time (sec):", round(guide_elapsed, 2))
-print("Guide confusion matrix:")
+print("Точность базовой модели по методичке:", round(guide_accuracy, 4))
+print("Время обучения базовой модели (сек):", round(guide_elapsed, 2))
+print("Матрица ошибок для базовой модели:")
 print(confusion_matrix(guide_y_test, guide_pred))
 display(report_dataframe(guide_y_test, guide_pred))
 
+# Строим матрицу ошибок: по диагонали находятся верные ответы,
+# вне диагонали — ошибки классификации.
 ConfusionMatrixDisplay.from_predictions(guide_y_test, guide_pred)
-plt.title("review_polarity - Guide Baseline RandomForest")
+plt.title("review_polarity — базовый RandomForest по методичке")
 plt.show()
 """
     )
@@ -268,21 +289,58 @@ plt.show()
 
 cells.append(
     nbf.v4.new_markdown_cell(
-        """The PDF shows `0.855`. On the current environment the exact reproduction is usually very close, but not bit-for-bit identical.  
-To satisfy the homework target and improve beyond it, the next section tunes vectorizer/model weights and hyperparameters on a proper train/test workflow.
+        """### Пояснение к графику базовой модели
+
+На графике выше показана **матрица ошибок**:
+
+- значения на главной диагонали означают верные классификации;
+- верхняя правая ячейка показывает, сколько отрицательных отзывов модель ошибочно признала положительными;
+- нижняя левая ячейка показывает, сколько положительных отзывов модель ошибочно признала отрицательными.
+
+Чем сильнее заполнена диагональ и чем меньше значения вне диагонали, тем лучше работает модель.
+
+В PDF приведено значение `0.855`. В текущем окружении точное воспроизведение даёт очень близкий результат, но не обязано совпадать до последнего знака из-за отличий версий библиотек и реализации.  
+Поэтому дальше выполняется улучшение модели: меняются признаки, веса и гиперпараметры, чтобы гарантированно выйти выше целевого порога.
+"""
+    )
+)
+
+cells.append(
+    nbf.v4.new_markdown_cell(
+        """### Что менялось для улучшения качества
+
+Чтобы поднять качество выше `0.855`, были проверены несколько направлений:
+
+1. **Изменение модели**  
+   Вместо одного только `RandomForest` были протестированы `LogisticRegression` и `LinearSVC`. Для задач классификации текста линейные модели на TF-IDF-признаках часто работают лучше деревьев.
+
+2. **Изменение представления текста**  
+   Вместо ограниченного словаря из 1500 слов использовался более широкий словарь, а также **биграммы** `ngram_range=(1, 2)`, чтобы модель видела не только отдельные слова, но и устойчивые пары слов.
+
+3. **Изменение весов признаков**  
+   В `TfidfVectorizer` включён `sublinear_tf=True`, чтобы слишком частые слова не доминировали над остальными признаками.
+
+4. **Изменение весов классов**  
+   В ряде моделей добавлен `class_weight="balanced"`, чтобы модель устойчивее вела себя при возможном перекосе по сложности классов.
+
+5. **Подбор гиперпараметров**  
+   Менялись `max_features`, `min_df`, `max_df`, `C`, тип модели и параметры случайного леса. После этого выбиралась конфигурация с лучшей точностью на тестовой выборке.
 """
     )
 )
 
 cells.append(
     nbf.v4.new_code_cell(
-        """review_x_train, review_x_test, review_y_train, review_y_test = train_test_split(
+        """# Здесь уже используем более корректную схему:
+# сначала делим данные, затем обучаем векторизатор внутри Pipeline.
+review_x_train, review_x_test, review_y_train, review_y_test = train_test_split(
     review_df["text"],
     review_df["label"],
     test_size=0.2,
     random_state=0,
 )
 
+# Формируем набор моделей-кандидатов с разными признаками и параметрами.
 review_candidates = {
     "rf_tuned": Pipeline(
         [
@@ -343,6 +401,7 @@ review_candidates = {
     ),
 }
 
+# Обучаем все варианты и сравниваем их по точности и времени.
 review_training_log, review_fitted_models = evaluate_candidates(
     review_candidates,
     review_x_train,
@@ -357,28 +416,45 @@ review_best_model = review_fitted_models[review_best_name]
 review_best_pred = review_best_model.predict(review_x_test)
 review_best_accuracy = accuracy_score(review_y_test, review_best_pred)
 
-print("Best review_polarity tuned model:", review_best_name)
-print("Best review_polarity tuned accuracy:", round(review_best_accuracy, 4))
+print("Лучшая улучшенная модель для review_polarity:", review_best_name)
+print("Точность лучшей улучшенной модели:", round(review_best_accuracy, 4))
 """
     )
 )
 
 cells.append(
     nbf.v4.new_code_cell(
-        """print("Detailed metrics for the best review_polarity model")
+        """# Выводим итоговые метрики и строим матрицу ошибок для лучшей модели.
+print("Подробные метрики лучшей модели для review_polarity")
 print(confusion_matrix(review_y_test, review_best_pred))
 display(report_dataframe(review_y_test, review_best_pred))
 
 ConfusionMatrixDisplay.from_predictions(review_y_test, review_best_pred)
-plt.title(f"review_polarity - {review_best_name}")
+plt.title(f"review_polarity — {review_best_name}")
 plt.show()
 """
     )
 )
 
 cells.append(
+    nbf.v4.new_markdown_cell(
+        """### Пояснение к графику улучшенной модели
+
+На второй матрице ошибок видно, насколько улучшенная модель распределяет ответы по классам:
+
+- если числа на диагонали выросли по сравнению с базовой моделью, значит улучшилось количество верных ответов;
+- если числа вне диагонали уменьшились, значит модель стала реже путать положительные и отрицательные отзывы.
+
+В этом ноутбуке лучшей оказалась линейная SVM-модель (`LinearSVC`) на TF-IDF-признаках с биграммами. Это логично для коротких текстов: такие модели хорошо работают в пространствах большой размерности, где признаки разреженные.
+"""
+    )
+)
+
+cells.append(
     nbf.v4.new_code_cell(
-        """review_model_path = ARTIFACTS_DIR / "review_polarity_best_model.pkl"
+        """# Сохраняем лучшую модель на диск и сразу проверяем, что она
+# корректно загружается и даёт тот же результат.
+review_model_path = ARTIFACTS_DIR / "review_polarity_best_model.pkl"
 with open(review_model_path, "wb") as handle:
     pickle.dump(review_best_model, handle)
 
@@ -388,24 +464,24 @@ with open(review_model_path, "rb") as handle:
 loaded_review_pred = loaded_review_model.predict(review_x_test)
 loaded_review_accuracy = accuracy_score(review_y_test, loaded_review_pred)
 
-print("Saved model to:", review_model_path)
-print("Reloaded review_polarity model accuracy:", round(loaded_review_accuracy, 4))
+print("Модель сохранена в:", review_model_path)
+print("Точность после повторной загрузки:", round(loaded_review_accuracy, 4))
 """
     )
 )
 
 cells.append(
     nbf.v4.new_markdown_cell(
-        """## Part 2. Additional Kaggle Dataset
+        """## Часть 2. Дополнительный датасет из Kaggle
 
-Selected dataset: [IMDB Dataset of 50K Movie Reviews](https://www.kaggle.com/datasets/lakshmi25npathi/imdb-dataset-of-50k-movie-reviews)
+Выбранный датасет: [IMDB Dataset of 50K Movie Reviews](https://www.kaggle.com/datasets/lakshmi25npathi/imdb-dataset-of-50k-movie-reviews)
 
-Why it fits the task:
+Почему он подходит под задание:
 
-- Similar domain: movie review sentiment classification
-- Text dataset
-- 50,000 rows, which is far above the minimum of 2,000
-- Binary target with clean evaluation setup
+- близкая предметная область: тональность отзывов на фильмы;
+- текстовый формат данных;
+- 50 000 строк, что значительно больше минимального порога в 2 000;
+- бинарная целевая переменная и удобная постановка задачи классификации.
 """
     )
 )
@@ -418,8 +494,10 @@ imdb_csv_path = imdb_download_dir / "IMDB Dataset.csv"
 imdb_df = pd.read_csv(imdb_csv_path)
 imdb_df["label"] = (imdb_df["sentiment"] == "positive").astype(int)
 
-print("Kaggle dataset path:", imdb_csv_path)
-print("Shape:", imdb_df.shape)
+# Загружаем CSV из Kaggle и кодируем метки:
+# positive -> 1, negative -> 0.
+print("Путь к датасету Kaggle:", imdb_csv_path)
+print("Размер таблицы:", imdb_df.shape)
 display(imdb_df.head(3))
 display(imdb_df["sentiment"].value_counts().rename_axis("sentiment").reset_index(name="rows"))
 """
@@ -428,7 +506,8 @@ display(imdb_df["sentiment"].value_counts().rename_axis("sentiment").reset_index
 
 cells.append(
     nbf.v4.new_code_cell(
-        """imdb_df["clean_text"] = imdb_df["review"].map(clean_imdb_text)
+        """# Очищаем тексты и делим датасет на train/test.
+imdb_df["clean_text"] = imdb_df["review"].map(clean_imdb_text)
 
 imdb_x_train, imdb_x_test, imdb_y_train, imdb_y_test = train_test_split(
     imdb_df["clean_text"],
@@ -438,15 +517,16 @@ imdb_x_train, imdb_x_test, imdb_y_train, imdb_y_test = train_test_split(
     stratify=imdb_df["label"],
 )
 
-print("IMDB train rows:", len(imdb_x_train))
-print("IMDB test rows:", len(imdb_x_test))
+print("Количество строк в обучающей выборке IMDB:", len(imdb_x_train))
+print("Количество строк в тестовой выборке IMDB:", len(imdb_x_test))
 """
     )
 )
 
 cells.append(
     nbf.v4.new_code_cell(
-        """imdb_candidates = {
+        """# Сравниваем несколько линейных моделей для большого текстового датасета.
+imdb_candidates = {
     "imdb_logreg_best": Pipeline(
         [
             (
@@ -506,6 +586,7 @@ cells.append(
     ),
 }
 
+# Обучаем все варианты и выбираем лучший по accuracy.
 imdb_training_log, imdb_fitted_models = evaluate_candidates(
     imdb_candidates,
     imdb_x_train,
@@ -520,28 +601,46 @@ imdb_best_model = imdb_fitted_models[imdb_best_name]
 imdb_best_pred = imdb_best_model.predict(imdb_x_test)
 imdb_best_accuracy = accuracy_score(imdb_y_test, imdb_best_pred)
 
-print("Best IMDB model:", imdb_best_name)
-print("Best IMDB accuracy:", round(imdb_best_accuracy, 4))
+print("Лучшая модель для IMDB:", imdb_best_name)
+print("Точность лучшей модели IMDB:", round(imdb_best_accuracy, 4))
 """
     )
 )
 
 cells.append(
     nbf.v4.new_code_cell(
-        """print("Detailed metrics for the best IMDB model")
+        """# Показываем метрики и матрицу ошибок для лучшей модели на IMDB.
+print("Подробные метрики лучшей модели для IMDB")
 print(confusion_matrix(imdb_y_test, imdb_best_pred))
 display(report_dataframe(imdb_y_test, imdb_best_pred))
 
 ConfusionMatrixDisplay.from_predictions(imdb_y_test, imdb_best_pred)
-plt.title(f"IMDB 50K - {imdb_best_name}")
+plt.title(f"IMDB 50K — {imdb_best_name}")
 plt.show()
 """
     )
 )
 
 cells.append(
+    nbf.v4.new_markdown_cell(
+        """### Пояснение к графику IMDB
+
+Здесь также показана матрица ошибок:
+
+- левая верхняя и правая нижняя ячейки — корректные предсказания;
+- две остальные ячейки — ошибки модели.
+
+Для IMDB значения на диагонали заметно больше, чем вне диагонали, поэтому модель хорошо разделяет положительные и отрицательные отзывы.  
+Высокая точность объясняется и объёмом данных: у модели есть 50 000 отзывов, из-за чего она лучше учит устойчивые закономерности, чем на наборе из 2 000 документов.
+"""
+    )
+)
+
+cells.append(
     nbf.v4.new_code_cell(
-        """imdb_model_path = ARTIFACTS_DIR / "imdb_best_model.pkl"
+        """# Сохраняем и повторно загружаем лучшую модель, чтобы подтвердить
+# воспроизводимость результата.
+imdb_model_path = ARTIFACTS_DIR / "imdb_best_model.pkl"
 with open(imdb_model_path, "wb") as handle:
     pickle.dump(imdb_best_model, handle)
 
@@ -551,25 +650,26 @@ with open(imdb_model_path, "rb") as handle:
 loaded_imdb_pred = loaded_imdb_model.predict(imdb_x_test)
 loaded_imdb_accuracy = accuracy_score(imdb_y_test, loaded_imdb_pred)
 
-print("Saved model to:", imdb_model_path)
-print("Reloaded IMDB model accuracy:", round(loaded_imdb_accuracy, 4))
+print("Модель сохранена в:", imdb_model_path)
+print("Точность после повторной загрузки IMDB-модели:", round(loaded_imdb_accuracy, 4))
 """
     )
 )
 
 cells.append(
     nbf.v4.new_markdown_cell(
-        """## Final Accuracy Summary"""
+        """## Итоговое сравнение точности"""
     )
 )
 
 cells.append(
     nbf.v4.new_code_cell(
-        """summary = pd.DataFrame(
+        """# Собираем итоговую таблицу по всем ключевым моделям.
+summary = pd.DataFrame(
     [
         {
             "dataset": "review_polarity",
-            "model": "Guide baseline RandomForest",
+            "model": "Базовый RandomForest по методичке",
             "accuracy": guide_accuracy,
         },
         {
@@ -587,8 +687,8 @@ cells.append(
 summary["accuracy_pct"] = (summary["accuracy"] * 100).round(2)
 display(summary.sort_values(["dataset", "accuracy"], ascending=[True, False]).reset_index(drop=True))
 
-print("Target >= 0.855 reached on review_polarity:", review_best_accuracy >= 0.855)
-print("Improved beyond 0.855:", review_best_accuracy > 0.855)
+print("Цель >= 0.855 на review_polarity достигнута:", review_best_accuracy >= 0.855)
+print("Результат улучшен сверх 0.855:", review_best_accuracy > 0.855)
 """
     )
 )
